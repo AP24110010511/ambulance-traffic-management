@@ -4,13 +4,16 @@ import sqlite3
 import hashlib
 import random
 from datetime import datetime, timedelta
+import os
 
 app = Flask(__name__)
 CORS(app)
 
 DB_FILE = "users.db"
 
-
+# ---------------------------
+# Initialize Database
+# ---------------------------
 def init_db():
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
@@ -55,19 +58,22 @@ def init_db():
 
     conn.commit()
     conn.close()
-    print("Database initialized")
+    print("✅ Database initialized")
 
-
+# ---------------------------
+# DB Helper
+# ---------------------------
 def get_db():
     conn = sqlite3.connect(DB_FILE)
     conn.row_factory = sqlite3.Row
     return conn
 
-
+# ---------------------------
+# Routes
+# ---------------------------
 @app.route("/")
 def home():
     return "Auth Server Running!"
-
 
 @app.route("/api/auth/register", methods=["POST"])
 def register():
@@ -86,7 +92,7 @@ def register():
     try:
         conn = get_db()
         conn.execute(
-            "INSERT INTO users (username,email,phone,password_hash,role) VALUES (?,?,?,?,?)",
+            "INSERT INTO users (username, email, phone, password_hash, role) VALUES (?,?,?,?,?)",
             (username, email, phone, pw_hash, role)
         )
         conn.commit()
@@ -94,7 +100,6 @@ def register():
         return jsonify({"success": True, "message": "Registered successfully"}), 201
     except sqlite3.IntegrityError:
         return jsonify({"success": False, "message": "User already exists"}), 400
-
 
 @app.route("/api/auth/login", methods=["POST"])
 def login():
@@ -130,7 +135,6 @@ def login():
         }
     })
 
-
 @app.route("/api/auth/send-otp", methods=["POST"])
 def send_otp():
     data = request.json
@@ -147,9 +151,8 @@ def send_otp():
     conn.commit()
     conn.close()
 
-    print("OTP:", otp)
+    print("🔐 OTP:", otp)
     return jsonify({"success": True, "otp": otp})
-
 
 @app.route("/api/auth/verify-otp", methods=["POST"])
 def verify_otp():
@@ -175,7 +178,10 @@ def verify_otp():
 
     return jsonify({"success": True, "message": "OTP verified"})
 
-
+# ---------------------------
+# START SERVER (RENDER FIX)
+# ---------------------------
 if __name__ == "__main__":
     init_db()
-    app.run(host="0.0.0.0", port=5000)
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port)
