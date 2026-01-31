@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Ambulance Traffic Management</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="stylesheet" href="dashboard.css">
+
+<!-- Leaflet CSS -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+</head>
+<body>
+
+<header>
+  <h1>🚑 Ambulance Traffic Management System</h1>
+  <div class="header-right">
+    <span id="userInfo" class="status"></span>
+    <button onclick="logout()" style="padding: 8px 16px; font-size: 12px; margin-left: 10px;">Logout</button>
+  </div>
+</header>
+
+<main>
+  <section class="left">
+    <div class="card">
+      <h2>📡 Ambulance GPS</h2>
+      <p>Status: <span class="green">LIVE</span></p>
+      <p>Latitude: <span id="lat">17.3850</span></p>
+      <p>Longitude: <span id="lng">78.4867</span></p>
+      <p>Speed: <span id="speed">60</span> km/h</p>
+    </div>
+
+<div class="card">
+      <h2>📏 Distance Calculation</h2>
+      <p>Nearest Signal: <b id="nearestSignal">NS-01</b></p>
+      <p>Distance: <span id="distance">0</span> meters</p>
+      <p>ETA: <span id="eta">0</span> sec</p>
+    </div>
+
+    <div class="card" id="hospitalCard">
+      <h2>🏥 Hospital Destination</h2>
+      <select id="hospital">
+        <option value="">Select Hospital</option>
+        <option value="Apollo">Apollo Hospitals</option>
+        <option value="KIMS">KIMS Hospital</option>
+        <option value="Continental">Continental Hospital</option>
+        <option value="Care">Care Hospital</option>
+        <option value="Yashoda">Yashoda Hospital</option>
+      </select>
+      <p>Status: <span id="hospitalStatus">Not Set</span></p>
+      <p>Destination: <span id="destinationName">-</span></p>
+    </div>
+
+  </section>
+
+  <section class="center">
+    <div id="map"></div>
+
+    <div class="corridor">
+      <h2>🟢 Green Corridor</h2>
+      <p>Status: <span class="green">ACTIVE</span></p>
+      <p>Signals Cleared: <span id="cleared">0</span>/5</p>
+      <div class="progress"><div class="bar" id="progressBar"></div></div>
+    </div>
+  </section>
+
+  <section class="right">
+    <div class="card">
+      <h2>🚦 Signal Preemption</h2>
+      <div class="signals">
+        <div class="light red" id="red"></div>
+        <div class="light yellow" id="yellow"></div>
+        <div class="light green" id="green"></div>
+      </div>
+      <p>Override: <span class="green">ENABLED</span></p>
+      <p>Next Switch in <span id="timer">3</span>s</p>
+    </div>
+
+    <button id="controlBtn">Start Ambulance</button>
+  </section>
+</main>
+
+<footer>Hackathon Prototype • Free Simulation with Leaflet</footer>
+
+<!-- Socket.io -->
+<script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+<!-- Leaflet JS -->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<!-- Dashboard JS -->
+<script src="dashboard.js"></script>
+
+</body>
+</html>

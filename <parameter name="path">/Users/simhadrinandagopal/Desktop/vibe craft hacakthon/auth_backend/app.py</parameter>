@@ -1,0 +1,200 @@
+<parameter name="content">"""""
+Ambulance Traffic Management System - Authentication Backend
+Flask + SQLite
+"""
+
+from flask import Flask, request, jsonify
+from flask_cors import CORS
+import sqlite3
+import hashlib
+import random
+from datetime import datetime, timedelta
+
+app = Flask(__name__)
+CORS(app)
+
+DB_FILE = 'users.db'
+
+def init_db():
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT UNIQUE NOT NULL,
+            email TEXT UNIQUE NOT NULL,
+            phone TEXT UNIQUE NOT NULL,
+            password_hash TEXT NOT NULL,
+            role TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+    
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS otp (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            phone TEXT NOT NULL,
+            otp TEXT NOT NULL,
+            expires_at TIMESTAMP NOT NULL,
+            verified INTEGER DEFAULT 0
+        )
+    ''')
+    
+    # Demo users
+    demo_users = [
+        ('admin', 'admin@test.com', '+919999999999', 
+         hashlib.sha256('Admin@123'.encode()).hexdigest(), 'admin'),
+        ('driver', 'driver@test.com', '+919999999998',
+         hashlib.sha256('Driver@123'.encode()).hexdigest(), 'driver'),
+    ]
+    
+    for u in demo_users:
+        try:
+            cursor.execute('INSERT INTO users (username, email, phone, password_hash, role) VALUES (?,?,?,?,?)', u)
+        except:
+            pass
+    
+    conn.commit()
+    conn.close()
+    print("Database initialized!")
+
+def get_db():
+    conn = sqlite3.connect(DB_FILE)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+@app.route('/')
+def home():
+    return 'Auth Server Running!'
+
+@app.route('/api/auth/register', methods=['POST'])
+def register():
+    data = request.get_json()
+    username = data.get('username', '').lower().strip()
+    email = data.get('email', '').strip().lower()
+    phone = data.get('phone', '').strip()
+    password = data.get('password', '')
+    role = data.get('role', 'driver')
+    
+    if not all([username, email, phone, password]):
+        return jsonify({'success': False, 'message': 'All fields required!'}), 400
+    
+    try:
+        pw_hash = hashlib.sha256(password.encode()).hexdigest()
+        conn = get_db()
+        conn.execute('INSERT INTO users (username, email, phone, password_hash, role) VALUES (?,?,?,?,?)',
+                    (username, email, phone, pw_hash, role))
+        conn.commit()
+        conn.close()
+        return jsonify({'success': True, 'message': 'Registration successful! Login now.'}), 201
+    except sqlite3.IntegrityError:
+        return jsonify({'success': False, 'message': 'Username/email/phone already exists!'}), 400
+
+@app.route('/api/auth/login', methods=['POST'])
+def login():
+    data = request.get_json()
+    username = data.get('username', '').lower().strip()
+    password = data.get('password', '')
+    role = data.get('role', '')
+    
+    conn = get_db()
+    user = conn.execute('SELECT * FROM users WHERE username = ?', (username,)).fetchone()
+    conn.close()
+    
+    if not user:
+        return jsonify({'success': False, 'message': 'User not found!'}), 401
+    
+    pw_hash = hashlib.sha256(password.encode()).hexdigest()
+    if pw_hash != user['password_hash']:
+        return jsonify({'success': False, 'message': 'Wrong password!'}), 401
+    
+    if user['role'] != role:
+        return jsonify({'success': False, 'message': f'Account is for {user["role"]} role!'}), 401
+    
+    return jsonify({
+        'success': True,
+        'message': 'Login successful!',
+        'data': {'username': user['username'], 'role': user['role'], 'email': user['email']}
+    }), 200
+
+@app.route('/api/auth/send-otp', methods=['POST'])
+def send_otp():
+    data = request.get_json()
+    phone = data.get('phone', '').strip()
+    
+    conn = get_db()
+    user = conn.execute('SELECT * FROM users WHERE phone = ?', (phone,)).fetchone()
+    conn.close()
+    
+    if not user:
+        return jsonify({'success': False, 'message': 'Phone not registered!'}), 404
+    
+    otp = str(random.randint(100000, 999999))
+    expires = datetime.now() + timedelta(minutes=5)
+    
+    conn = get_db()
+    conn.execute('INSERT INTO otp (phone, otp, expires_at) VALUES (?,?,?)', (phone, otp, expires))
+    conn.commit()
+    conn.close()
+    
+    print(f"\nOTP for {phone}: {otp}\n")
+    
+    return jsonify({'success': True, 'message': 'OTP sent!', 'debug_otp': otp}), 200
+
+@app.route('/api/auth/verify-otp', methods=['POST'])
+def verify_otp():
+    data = request.get_json()
+    phone = data.get('phone', '').strip()
+    otp = data.get('otp', '').strip()
+    
+    conn = get_db()
+    record = conn.execute('SELECT * FROM otp WHERE phone = ? AND otp = ? AND verified = 0 ORDER BY id DESC LIMIT 1',
+                         (phone, otp)).fetchone()
+    conn.close()
+    
+    if not record:
+        return jsonify({'success': False, 'message': 'Invalid OTP!'}), 400
+    
+    exp = datetime.strptime(record['expires_at'], '%Y-%m-%d %H:%M:%S.%f')
+    if datetime.now() > exp:
+        return jsonify({'success': False, 'message': 'OTP expired!'}), 400
+    
+    conn = get_db()
+    conn.execute('UPDATE otp SET verified = 1 WHERE id = ?', (record['id'],))
+    conn.commit()
+    conn.close()
+    
+    return jsonify({'success': True, 'message': 'OTP verified!'}), 200
+
+@app.route('/api/auth/reset-password', methods=['POST'])
+def reset_password():
+    data = request.get_json()
+    phone = data.get('phone', '').strip()
+    new_password = data.get('password', '')
+    
+    conn = get_db()
+    verified = conn.execute('SELECT id FROM otp WHERE phone = ? AND verified = 1 ORDER BY id DESC LIMIT 1',
+                           (phone,)).fetchone()
+    
+    if not verified:
+        conn.close()
+        return jsonify({'success': False, 'message': 'Verify OTP first!'}), 400
+    
+    pw_hash = hashlib.sha256(new_password.encode()).hexdigest()
+    conn.execute('UPDATE users SET password_hash = ? WHERE phone = ?', (pw_hash, phone))
+    conn.commit()
+    conn.close()
+    
+    return jsonify({'success': True, 'message': 'Password reset successful!'}), 200
+
+if __name__ == '__main__':
+    init_db()
+    print("\n" + "="*50)
+    print("Auth Server Running on http://localhost:5000")
+    print("="*50)
+    print("Demo: admin/Admin@123, driver/Driver@123")
+    print("OTP phone: +919999999999")
+    print("="*50)
+    app.run(port=5000, debug=True)
+</parameter>
